@@ -73,54 +73,65 @@ user_features_origin_ = 0.1 * RandomState(seed).rand(n_user, n_feature)
 item_features_origin_ = 0.1 * RandomState(seed).rand(n_item, n_feature)
 
 #train origin model
-for iteration in xrange(n_iters):
-    t1 = time.time()
-    ALS_origin(n_user, n_item, n_feature, train, mean_rating_, lamda_u, lamda_v, user_features_origin_, item_features_origin_)
-    train_preds = predict(train.take([0, 1], axis=1), user_features_origin_, item_features_origin_, mean_rating_)
-    train_rmse = RMSE(train_preds, train.take(2, axis=1))
-    t2 = time.time()
-    print("The %d th iteration \t time: %ds \t RMSE: %f " % (iteration + 1, t2 - t1, train_rmse))
-    # stop when converge
-    if last_rmse and abs(train_rmse - last_rmse) < converge:
-        break
-    else:
-        last_rmse = train_rmse
+def optimize_model_origin():
+    print("Start training model without data poisoning attacks!")
+    last_rmse = None
+    for iteration in xrange(n_iters):
+        t1 = time.time()
+        ALS_origin(n_user, n_item, n_feature, train, mean_rating_, lamda_u, lamda_v, user_features_origin_, item_features_origin_)
+        train_preds = predict(train.take([0, 1], axis=1), user_features_origin_, item_features_origin_, mean_rating_)
+        train_rmse = RMSE(train_preds, train.take(2, axis=1))
+        t2 = time.time()
+        print("The %d th iteration \t time: %ds \t RMSE: %f " % (iteration + 1, t2 - t1, train_rmse))
+        # stop when converge
+        if last_rmse and abs(train_rmse - last_rmse) < converge:
+            break
+        else:
+            last_rmse = train_rmse
+    return last_rmse
 
 #train added attack data model
-for iteration in xrange(n_iters):
-    t1 = time.time()
-    ALS(n_user, n_item, n_feature, mal_user, train, mean_rating_, mal_mean_rating_, mal_ratings, lamda_u, lamda_v, \
-    user_features_, mal_user_features_, item_features_)
-    train_preds = predict(train.take([0, 1], axis=1), user_features_, item_features_, mean_rating_)
-    train_rmse = RMSE(train_preds, train.take(2, axis=1))
-    t2 = time.time()
-    print("The %d th iteration \t time: %ds \t RMSE: %f " % (iteration + 1, t2 - t1, train_rmse))
-    # stop when converge
-    if last_rmse and abs(train_rmse - last_rmse) < converge:
-        break
-    else:
-        last_rmse = train_rmse
+def optimize_model():
+    print("Start training model with data poisoning attacks!")
+    last_rmse = None
+    for iteration in xrange(n_iters):
+        t1 = time.time()
+        ALS(n_user, n_item, n_feature, mal_user, train, mean_rating_, mal_mean_rating_, mal_ratings, lamda_u, lamda_v, \
+        user_features_, mal_user_features_, item_features_)
+        train_preds = predict(train.take([0, 1], axis=1), user_features_, item_features_, mean_rating_)
+        train_rmse = RMSE(train_preds, train.take(2, axis=1))
+        t2 = time.time()
+        print("The %d th iteration \t time: %ds \t RMSE: %f " % (iteration + 1, t2 - t1, train_rmse))
+        # stop when converge
+        if last_rmse and abs(train_rmse - last_rmse) < converge:
+            break
+        else:
+            last_rmse = train_rmse
+    return last_rmse
 
 #using the algorithm of PGA to optimize the utility function
 '''
 m_iters: number of iteration in PGA
 s_t: step size 
-Lamda: 
+Lamda: the contraint of vector
 '''
 m_iters = 10
 s_t = 0.2 * np.ones([m_iters])
 converge = 1e-5
 Lamda = 1
 last_rmse = None
+#optimize_model_origin()
 for t in xrange(m_iters):
     t1 = time.time()
+    #optimize_model()
     grad_total = compute_grad(n_user, n_item, mal_user, mal_ratings, train, user_features_, mal_user_features_, \
                         item_features_, lamda_v, n_feature, user_features_origin_, item_features_origin_)
-    temp = mal_user_features_
-    mal_user_features_ +=  grad_total * s_t[t]
-    mal_user_features_[mal_user_features_ > Lamda] = Lamda
-    mal_user_features_[mal_user_features_ < - Lamda] = - Lamda
-    rmse = rmse(mal_user_features_, temp)
+    mal_data = np.dot(mal_user_features_, item_features_)
+    temp = mal_data
+    mal_data +=  grad_total * s_t[t]
+    mal_data[mal_data > Lamda] = Lamda
+    mal_data[mal_data < - Lamda] = - Lamda
+    rmse = rmse(mal_data, temp)
     t2 = time.time()
     print("The %d th iteration \t time: %ds \t RMSE: %f " % (t + 1, t2 - t1, rmse))
     if last_rmse and abs(rmse - last_rmse) < converge:
@@ -128,4 +139,5 @@ for t in xrange(m_iters):
     else:
         last_rmse = rmse
     
+
 
